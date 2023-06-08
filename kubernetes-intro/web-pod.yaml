@@ -15,6 +15,12 @@ spec:
   containers:
   - name: web
     image: sergey69244/webserver:0.1
+    readinessProbe:
+      httpGet:
+        path: /index.html
+        port: 80
+    livenessProbe:
+      tcpSocket: { port: 8000 }      
     volumeMounts:
       - name: app
         mountPath: /app
