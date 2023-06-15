@@ -23,7 +23,8 @@ def render_template(filename, vars_dict):
     env = Environment(loader=FileSystemLoader('./templates'))
     template = env.get_template(filename)
     yaml_manifest = template.render(vars_dict)
-    json_manifest = yaml.load(yaml_manifest)
+    json_manifest = yaml.load(yaml_manifest, Loader=yaml.SafeLoader)
+#    json_manifest = yaml.load(yaml_manifest)
     return json_manifest
 
 
@@ -70,10 +71,8 @@ def mysql_on_create(body, spec, **kwargs):
 
 
     # Определяем, что созданные ресурсы являются дочерними к управляемому CustomResource:
+
     # kopf.append_owner_reference(persistent_volume, owner=body)
-    
-    # kopf.append_owner_reference(persistent_volume, owner=body)
-    kopf.adopt(persistent_volume)
     kopf.append_owner_reference(persistent_volume_claim, owner=body) # addopt
     kopf.append_owner_reference(service, owner=body)
     kopf.append_owner_reference(deployment, owner=body)
@@ -81,7 +80,7 @@ def mysql_on_create(body, spec, **kwargs):
 
     api = kubernetes.client.CoreV1Api()
     # Создаем mysql PV:
-    #api.create_persistent_volume(persistent_volume)
+    api.create_persistent_volume(persistent_volume)
     # Создаем mysql PVC:
     api.create_namespaced_persistent_volume_claim('default', persistent_volume_claim)
     # Создаем mysql SVC:
@@ -106,7 +105,7 @@ def mysql_on_create(body, spec, **kwargs):
         api.create_persistent_volume(backup_pv)
     except kubernetes.client.rest.ApiException:
         pass
-    
+
     try:
         backup_pvc = render_template('backup-pvc.yml.j2', {'name': name})
         api = kubernetes.client.CoreV1Api()
@@ -115,7 +114,7 @@ def mysql_on_create(body, spec, **kwargs):
     #    print("Exception when calling CoreV1Api->create pvc: {}".format(e)) 
     except kubernetes.client.rest.ApiException:
         pass
-        
+
 
 @kopf.on.delete('otus.homework', 'v1', 'mysqls')
 def delete_object_make_backup(body, **kwargs):
@@ -135,6 +134,13 @@ def delete_object_make_backup(body, **kwargs):
         'database': database})
     api.create_namespaced_job('default', backup_job)
     wait_until_job_end(f"backup-{name}-job")
+
+    # Удаляем pv, т.к. addopt не работает с namespaceless ресурсами
+    try:
+        api = kubernetes.client.CoreV1Api()
+        api.delete_persistent_volume(f'{name}-pv')
+    except kubernetes.client.rest.ApiException as e:
+        print("Exception when calling CoreV1Api->delete_persistent_volume: %s\n" % e)
 
     return {'message': "mysql and its children resources deleted"}
 

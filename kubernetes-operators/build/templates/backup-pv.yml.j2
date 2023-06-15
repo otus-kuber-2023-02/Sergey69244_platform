@@ -5,7 +5,11 @@ metadata:
   labels:
     pv-usage: "backup-{{ name }}"
 spec:
+  storageClassName: manual
   persistentVolumeReclaimPolicy: Retain
+  claimRef:
+     namespace: default
+     name: "backup-{{ name }}-pvc"
   accessModes:
     - ReadWriteOnce
   capacity:
